@@ -206,7 +206,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		if (DrawingPolygon && PP.size()>0) {
 			int xPos = GET_X_LPARAM(lParam);
 			int yPos = GET_Y_LPARAM(lParam);
-			RECT rect = { (int)PP[PP.size() - 1].X - 20, PP[PP.size() - 1].Y - 20,xPos + 20, yPos + 20};
+			int offsetX = 20;
+			int offsetY = 20;
+
+			if (PP[PP.size() - 1].X > xPos)
+				offsetX *= -1;
+			if (PP[PP.size() - 1].Y > yPos)
+				offsetY *= -1;
+			
+			RECT rect = { (int)PP[PP.size() - 1].X - offsetX, PP[PP.size() - 1].Y - offsetY,xPos + offsetX, yPos + offsetY };
 
 			InvalidateRect(hWnd, &rect, TRUE);
 		}
@@ -288,19 +296,14 @@ VOID OnLButtonDown(HWND hwnd, BOOL fDoubleClick, int x, int y, UINT keyFlags) {
 	}
 	else
 	{
-		if (CheckedInPoints.size() < MAX_CHECK_POINTS || CheckedOutPoints.size() < MAX_CHECK_POINTS) {
 			if (IsPolygonContains(PointF(x, y)))
 				CheckedInPoints.push_back(PointF(x, y));
 			else
 				CheckedOutPoints.push_back(PointF(x, y));
-			InvalidateRect(hwnd, NULL, TRUE);
-		}
-		else
-		{
-			WCHAR mes[] = L"Предел точек достинут(";
-			WCHAR caption[] = L"ОСТАНОВИСЬ!";
-			MessageBox(hwnd, mes, caption, MB_ICONWARNING | MB_OK);
-		}
+
+			RECT rect = { x - 5,y- 5,x + 10,y + 10 };
+			InvalidateRect(hwnd, &rect, TRUE);
+		
 	}
 }
 
@@ -313,8 +316,11 @@ BOOL IsPolygonContains(PointF point) {
 		v1 = PP[i % PP.size()] - PP[i - 1];
 		v2 = point - PP[i - 1];
 		det = calcDet(v1, v2);
-		if (det < 0)
+		if (BypassDirection == CLOCKWISE && det < 0)
 			return FALSE;
+		else if (BypassDirection == COUNTERCLOCKWISE && det > 0)
+			return FALSE;
+
 	}
 
 	return TRUE;
@@ -326,10 +332,17 @@ BOOL IsPolygonConvex() {
 	if (PP.size() < 3)
 		return FALSE;
 	
-	double wolk = calcDet(PP[1] - PP[0], PP[2] - PP[1]);
-	double det;
+	double wolk = 0;
+	int j;
+	for (j = 1; j < PP.size() && wolk == 0; j++)
+		wolk = calcDet(PP[j % PP.size()] - PP[j - 1], PP[(j + 1) % PP.size()] - PP[j]);
+
+	if (wolk == 0)
+		return FALSE;
+	
+	double det = 0;
 	PointF v1, v2;
-	for (int i = 2; i < PP.size(); ++i)
+	for (int i = j; i < PP.size(); ++i)
 	{
 		v1 = PP[i % PP.size()] - PP[i - 1];
 		v2 = PP[(i + 1) % PP.size()] - PP[i];
@@ -341,8 +354,13 @@ BOOL IsPolygonConvex() {
 			return FALSE;
 	}
 
-	if(det > 0)
-	
+	if (det > 0)
+		BypassDirection = CLOCKWISE;
+	else if (det < 0)
+		BypassDirection = COUNTERCLOCKWISE;
+	else
+		return FALSE;
+
 	return TRUE;
 }
 
